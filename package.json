@@ -1,0 +1,10 @@
+{
+  "name": "overcast-favorites-archiver",
+  "version": "1.0.0",
+  "scripts": {
+    "start": "sqlite-utils ~/Library/Containers/C3DC6169-FA9B-4FD0-B318-E9D5598160B1/Data/Documents/oc.db \"$(<./sql/overcast_export_recommended_episodes.sql)\" > favorites.json"
+  },
+  "keywords": [],
+  "author": "Jacob Ford <j@cobford.com> (https://jacobford.com/)",
+  "license": "ISC"
+}
