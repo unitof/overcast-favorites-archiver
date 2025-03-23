@@ -6,6 +6,7 @@ SELECT
     STRFTIME('%Y-%m-%d', CAST(feed_item.userRecommendedTime AS float),'unixepoch') AS userRecommendedTimeHuman,
     feed.link as feedLink,
     feed_item.url as episodeURL,
+    feed_item.enclosureURL as downloadURL,
     feed.artworkURL as feedArtworkURL
 FROM OCFeedItem AS feed_item
 INNER JOIN OCFeed AS feed ON (feed_item.feedID = feed.id)
