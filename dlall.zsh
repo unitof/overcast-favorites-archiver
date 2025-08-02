@@ -3,7 +3,7 @@
 json_file="favorites.json"
 
 jq -c '.[]' "$json_file" | while read -r episode; do
-  feedTitle=$(echo "$episode" | jq -r '.feedTitle' | tr -cs '[:alnum:] .-' ' ' | sed 's/ *$//')
+  feedTitle=$(echo "$episode" | jq -r '.feedTitle' | tr -d '_')
   title=$(echo "$episode" | jq -r '.title'     | tr -cs '[:alnum:] _.-' '_')
   url=$(echo "$episode" | jq -r '.downloadURL')
 
