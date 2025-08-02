@@ -4,7 +4,7 @@ json_file="favorites.json"
 
 jq -c '.[]' "$json_file" | while read -r episode; do
   feedTitle=$(echo "$episode" | jq -r '.feedTitle' | tr -d '_')
-  title=$(echo "$episode" | jq -r '.title'     | tr -cs '[:alnum:] _.-' '_')
+  title=$(echo "$episode" | jq -r '.title'     | tr -cs '[:alnum:] _.-' '_' | sed 's/^_*//; s/_*$//')
   episodeDate=$(echo "$episode" | jq -r '.userRecommendedTimeHuman')
   url=$(echo "$episode" | jq -r '.downloadURL')
 
