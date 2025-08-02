@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./dlall.zsh)",
+      "Bash(ls:*)"
+    ],
+    "deny": []
+  }
+}
