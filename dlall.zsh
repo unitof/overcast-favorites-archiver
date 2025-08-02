@@ -3,13 +3,13 @@
 json_file="favorites.json"
 
 jq -c '.[]' "$json_file" | while read -r episode; do
-  feedTitle=$(echo "$episode" | jq -r '.feedTitle' | tr -cs '[:alnum:] _.-' '_')
+  feedTitle=$(echo "$episode" | jq -r '.feedTitle' | tr -cs '[:alnum:] _.-' '_' | sed 's/_$//')
   title=$(echo "$episode" | jq -r '.title'     | tr -cs '[:alnum:] _.-' '_')
   url=$(echo "$episode" | jq -r '.downloadURL')
 
   # First, construct a preliminary output path to check if file exists
   # Use mp3 as default extension for initial check
-  out_path_base="/Users/jacob/Library/CloudStorage/GoogleDrive-j@cobford.com/My Drive/Filing Cabinet/Podcast Archive/[My Overcast Favorites]/$feedTitle/$title"
+  out_path_base="/Users/jacob/Library/CloudStorage/GoogleDrive-j@cobford.com/My Drive/Filing Cabinet/Podcast Archive/[My Overcast Favorites]/$feedTitle - $title"
   
   # Check if any file with this base name already exists (with any extension)
   if ls "$out_path_base".* >/dev/null 2>&1; then
