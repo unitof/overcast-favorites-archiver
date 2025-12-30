@@ -2,7 +2,10 @@
   "name": "overcast-favorites-archiver",
   "version": "1.0.0",
   "scripts": {
-    "start": "sqlite-utils ~/Library/Containers/C3DC6169-FA9B-4FD0-B318-E9D5598160B1/Data/Documents/oc.db \"$(<./sql/overcast_export_recommended_episodes.sql)\" > favorites.json"
+    "start": "sqlite-utils ~/Library/Containers/2EFFC350-6DCA-4E17-9FCC-4BBBC7C484C0/Data/Documents/db.sqlite \"$(<./sql/overcast_export_recommended_episodes.sql)\" > favorites.json",
+    "transcribe": "sh -c 'command -v uv >/dev/null 2>&1 || { echo \"uv not found. Install with: brew install uv\"; exit 1; }; [ -x .venv/bin/python ] || { echo \"Missing .venv. Run: npm run transcribe:setup\"; exit 1; }; mkdir -p .cache/matplotlib .cache/fontconfig .cache/huggingface; MPLCONFIGDIR=.cache/matplotlib XDG_CACHE_HOME=.cache HF_HOME=.cache/huggingface HF_HUB_CACHE=.cache/huggingface/hub ./.venv/bin/python scripts/transcribe_sidecars.py \"$@\"' --",
+    "transcribe:setup": "sh -c 'command -v uv >/dev/null 2>&1 || { echo \"uv not found. Install with: brew install uv\"; exit 1; }; PY=\"\"; for v in 3.12 3.11 3.10; do if command -v python$v >/dev/null 2>&1; then PY=python$v; break; fi; done; if [ -z \"$PY\" ]; then echo \"No supported Python found (need 3.10-3.12). Install with: brew install python@3.12\"; exit 1; fi; uv venv --python \"$PY\" .venv; uv pip install --python .venv/bin/python -r requirements.txt'",
+    "postinstall": "npm run transcribe:setup"
   },
   "keywords": [],
   "author": "Jacob Ford <j@cobford.com> (https://jacobford.com/)",
