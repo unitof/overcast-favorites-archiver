@@ -720,7 +720,14 @@ def transcribe_audio(path: Path, args: argparse.Namespace, line_status: LineStat
                 "Diarization requires a Hugging Face token. Provide --hf-token or set HF_TOKEN."
             )
         line_status.update("Diarizing speakers…")
-        diarize_model = whisperx.DiarizationPipeline(
+        try:
+            diarize_cls = whisperx.DiarizationPipeline
+            assign_speakers = whisperx.assign_word_speakers
+        except AttributeError:
+            from whisperx.diarize import DiarizationPipeline as diarize_cls
+            from whisperx.diarize import assign_word_speakers as assign_speakers
+
+        diarize_model = diarize_cls(
             use_auth_token=token,
             device=device,
         )
@@ -730,7 +737,7 @@ def transcribe_audio(path: Path, args: argparse.Namespace, line_status: LineStat
         if args.max_speakers is not None:
             diarize_kwargs["max_speakers"] = args.max_speakers
         diarize_segments = diarize_model(audio, **diarize_kwargs)
-        result = whisperx.assign_word_speakers(diarize_segments, result)
+        result = assign_speakers(diarize_segments, result)
 
     return {
         "language": result.get("language") or args.language or "unknown",
