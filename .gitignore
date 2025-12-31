@@ -1,2 +1,9 @@
 favorites.json
 node_modules
+
+# Local secrets
+.env
+
+# Local model/cache artifacts
+.models/
+.cache/

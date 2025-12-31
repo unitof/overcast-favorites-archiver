@@ -72,6 +72,23 @@ AUDIO_EXTENSIONS = {
 }
 
 
+def load_env_file(path: Path) -> None:
+    if not path.exists():
+        return
+    try:
+        for raw_line in path.read_text(encoding="utf-8").splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            key = key.strip()
+            value = value.strip().strip("'").strip('"')
+            if key and key not in os.environ:
+                os.environ[key] = value
+    except Exception:
+        return
+
+
 class LineStatus:
     def __init__(self) -> None:
         self._last_len = 0
@@ -736,6 +753,7 @@ def build_metadata(args: argparse.Namespace, language: str) -> Dict[str, str]:
 
 
 def main() -> int:
+    load_env_file(Path(".env"))
     args = parse_args()
     if args.offline:
         os.environ.setdefault("HF_HUB_OFFLINE", "1")
