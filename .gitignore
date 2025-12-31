@@ -7,3 +7,6 @@ node_modules
 # Local model/cache artifacts
 .models/
 .cache/
+
+# Transcription checkpoints
+.checkpoints/

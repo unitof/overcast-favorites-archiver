@@ -11,6 +11,8 @@ from __future__ import annotations
 import argparse
 from dataclasses import replace
 import datetime as dt
+import hashlib
+import json
 import os
 from pathlib import Path
 import re
@@ -87,6 +89,27 @@ def load_env_file(path: Path) -> None:
                 os.environ[key] = value
     except Exception:
         return
+
+
+def checkpoint_path_for(audio_path: Path, checkpoint_dir: Path) -> Path:
+    digest = hashlib.sha1(str(audio_path).encode("utf-8")).hexdigest()[:10]
+    safe_name = re.sub(r"[^A-Za-z0-9._-]+", "_", audio_path.stem)[:80]
+    filename = f"{safe_name}.{digest}.json"
+    return checkpoint_dir / filename
+
+
+def load_checkpoint(path: Path) -> Optional[dict]:
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+def save_checkpoint(path: Path, payload: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=True, indent=2), encoding="utf-8")
 
 
 class LineStatus:
@@ -230,6 +253,11 @@ def parse_args() -> argparse.Namespace:
         help="Disable diarization (speaker grouping).",
     )
     parser.add_argument(
+        "--skip-diarize-on-failure",
+        action="store_true",
+        help="Continue without diarization if the model cannot be loaded.",
+    )
+    parser.add_argument(
         "--offline",
         action="store_true",
         help="Disable model downloads (require local caches).",
@@ -262,6 +290,16 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=120,
         help="Max words per paragraph before forcing a break (default: 120).",
+    )
+    parser.add_argument(
+        "--checkpoint-dir",
+        default=".checkpoints",
+        help="Directory to store resumable checkpoints (default: .checkpoints).",
+    )
+    parser.add_argument(
+        "--no-resume",
+        action="store_true",
+        help="Disable resume from checkpoints.",
     )
     return parser.parse_args()
 
@@ -710,10 +748,76 @@ def transcribe_audio(
             ) from exc
         raise
 
-    audio = whisperx.load_audio(str(path))
-    result = transcribe_with_progress(model, audio, args, line_status, file_label)
+    diarize_enabled = not args.no_diarize
+    diarize_model = None
+    token = args.hf_token or os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_TOKEN")
+    if diarize_enabled and not token:
+        raise SystemExit(
+            "Diarization requires a Hugging Face token. Provide --hf-token or set HF_TOKEN."
+        )
+    if diarize_enabled:
+        line_status.update("Preparing diarization…")
+        try:
+            try:
+                diarize_cls = whisperx.DiarizationPipeline
+                assign_speakers = whisperx.assign_word_speakers
+            except AttributeError:
+                from whisperx.diarize import DiarizationPipeline as diarize_cls
+                from whisperx.diarize import assign_word_speakers as assign_speakers
 
-    if not args.no_align:
+            diarize_model = diarize_cls(
+                use_auth_token=token,
+                device=device,
+            )
+        except Exception as exc:
+            if args.skip_diarize_on_failure:
+                diarize_enabled = False
+            else:
+                msg = str(exc)
+                raise SystemExit(
+                    "Failed to load diarization model. Ensure:\n"
+                    "1) HF_TOKEN is set in .env (or pass --hf-token)\n"
+                    "2) You have accepted the model terms at https://hf.co/pyannote/speaker-diarization-3.1\n"
+                    "3) You have internet access for the first download (cached after)\n"
+                    "Or run with --no-diarize (or --skip-diarize-on-failure) to proceed without speaker labels.\n"
+                    f"Original error: {msg}"
+                ) from exc
+
+    checkpoint_dir = Path(args.checkpoint_dir)
+    checkpoint_path = checkpoint_path_for(path, checkpoint_dir)
+    checkpoint = None if args.no_resume else load_checkpoint(checkpoint_path)
+    checkpoint_stage = checkpoint.get("stage") if isinstance(checkpoint, dict) else None
+    audio_stat = None
+    try:
+        audio_stat = path.stat()
+    except Exception:
+        audio_stat = None
+
+    result = None
+    if checkpoint and audio_stat:
+        if (
+            checkpoint.get("audio_size") == audio_stat.st_size
+            and checkpoint.get("audio_mtime") == int(audio_stat.st_mtime)
+            and isinstance(checkpoint.get("result"), dict)
+        ):
+            result = checkpoint["result"]
+    if result is None:
+        audio = whisperx.load_audio(str(path))
+        result = transcribe_with_progress(model, audio, args, line_status, file_label)
+        if audio_stat:
+            save_checkpoint(
+                checkpoint_path,
+                {
+                    "stage": "transcribed",
+                    "audio_size": audio_stat.st_size,
+                    "audio_mtime": int(audio_stat.st_mtime),
+                    "result": result,
+                },
+            )
+    else:
+        audio = whisperx.load_audio(str(path))
+
+    if not args.no_align and checkpoint_stage != "aligned":
         line_status.update("Aligning transcript…")
         align_model, metadata = whisperx.load_align_model(
             language_code=result.get("language"),
@@ -727,25 +831,35 @@ def transcribe_audio(
             device,
             return_char_alignments=False,
         )
+        if audio_stat:
+            save_checkpoint(
+                checkpoint_path,
+                {
+                    "stage": "aligned",
+                    "audio_size": audio_stat.st_size,
+                    "audio_mtime": int(audio_stat.st_mtime),
+                    "result": result,
+                },
+            )
 
-    if not args.no_diarize:
+    if diarize_enabled:
         token = args.hf_token or os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_TOKEN")
         if not token:
             raise SystemExit(
                 "Diarization requires a Hugging Face token. Provide --hf-token or set HF_TOKEN."
             )
         line_status.update("Diarizing speakers…")
-        try:
-            diarize_cls = whisperx.DiarizationPipeline
-            assign_speakers = whisperx.assign_word_speakers
-        except AttributeError:
-            from whisperx.diarize import DiarizationPipeline as diarize_cls
-            from whisperx.diarize import assign_word_speakers as assign_speakers
-
-        diarize_model = diarize_cls(
-            use_auth_token=token,
-            device=device,
-        )
+        if diarize_model is None:
+            try:
+                diarize_cls = whisperx.DiarizationPipeline
+                assign_speakers = whisperx.assign_word_speakers
+            except AttributeError:
+                from whisperx.diarize import DiarizationPipeline as diarize_cls
+                from whisperx.diarize import assign_word_speakers as assign_speakers
+            diarize_model = diarize_cls(
+                use_auth_token=token,
+                device=device,
+            )
         diarize_kwargs = {}
         if args.min_speakers is not None:
             diarize_kwargs["min_speakers"] = args.min_speakers
