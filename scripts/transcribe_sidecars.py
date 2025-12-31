@@ -114,6 +114,7 @@ class ProgressPrinter:
         total_segments: int,
         total_seconds: float,
         line_status: LineStatus,
+        prefix: str = "",
         interval: float = 5.0,
     ) -> None:
         self.total_segments = max(0, total_segments)
@@ -121,6 +122,7 @@ class ProgressPrinter:
         self.interval = interval
         self._last_print = 0.0
         self._line_status = line_status
+        self._prefix = prefix.strip()
 
     def update(self, done_segments: int, done_seconds: float, done_words: int) -> None:
         now = time.time()
@@ -139,8 +141,9 @@ class ProgressPrinter:
         progress_time = format_timestamp(done_seconds)
         total_time = format_timestamp(self.total_seconds)
         if self.total_segments > 0:
+            prefix = f"{self._prefix} | " if self._prefix else ""
             self._line_status.update(
-                f"Progress: {percent:5.1f}% ({progress_time}/{total_time}) "
+                f"{prefix}Progress: {percent:5.1f}% ({progress_time}/{total_time}) "
                 f"- segments {min(done_segments, self.total_segments)}/{self.total_segments}, "
                 f"words {done_words}"
             )
@@ -320,7 +323,13 @@ def word_count(text: str) -> int:
     return len(text.split())
 
 
-def transcribe_with_progress(model, audio, args: argparse.Namespace, line_status: LineStatus) -> Dict[str, str]:
+def transcribe_with_progress(
+    model,
+    audio,
+    args: argparse.Namespace,
+    line_status: LineStatus,
+    file_label: str,
+) -> Dict[str, str]:
     import numpy as np
     import whisperx
     from faster_whisper.tokenizer import Tokenizer
@@ -386,6 +395,7 @@ def transcribe_with_progress(model, audio, args: argparse.Namespace, line_status
         total_segments=total_segments,
         total_seconds=total_seconds,
         line_status=line_status,
+        prefix=file_label,
     )
     done_words = 0
 
@@ -570,7 +580,12 @@ def write_vtt(
     output_path.write_text("\n".join(lines).strip() + "\n", encoding="utf-8")
 
 
-def transcribe_audio(path: Path, args: argparse.Namespace, line_status: LineStatus) -> Dict[str, str]:
+def transcribe_audio(
+    path: Path,
+    args: argparse.Namespace,
+    line_status: LineStatus,
+    file_label: str,
+) -> Dict[str, str]:
     try:
         import whisperx
     except ImportError as exc:  # pragma: no cover - runtime dependency
@@ -696,7 +711,7 @@ def transcribe_audio(path: Path, args: argparse.Namespace, line_status: LineStat
         raise
 
     audio = whisperx.load_audio(str(path))
-    result = transcribe_with_progress(model, audio, args, line_status)
+    result = transcribe_with_progress(model, audio, args, line_status, file_label)
 
     if not args.no_align:
         line_status.update("Aligning transcript…")
@@ -780,8 +795,9 @@ def main() -> int:
             print(f"Skipping {audio_path} (sidecar exists)")
             continue
 
-        line_status.update(f"Working on {audio_path.name}…")
-        result = transcribe_audio(audio_path, args, line_status)
+        file_label = audio_path.name
+        line_status.update(f"Working on {file_label}…")
+        result = transcribe_audio(audio_path, args, line_status, file_label)
         total_words = sum(word_count(clean_text(seg.get("text", ""))) for seg in result["segments"])
         progress = WordProgress(total_words, line_status, label="Processing transcript")
         paragraphs = group_segments(
