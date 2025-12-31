@@ -750,7 +750,7 @@ def transcribe_audio(
 
     diarize_enabled = not args.no_diarize
     diarize_model = None
-    token = args.hf_token or os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_TOKEN")
+    token = args.hf_token or os.environ.get("HF_TOKEN")
     if diarize_enabled and not token:
         raise SystemExit(
             "Diarization requires a Hugging Face token. Provide --hf-token or set HF_TOKEN."
@@ -778,7 +778,8 @@ def transcribe_audio(
                     "Failed to load diarization model. Ensure:\n"
                     "1) HF_TOKEN is set in .env (or pass --hf-token)\n"
                     "2) You have accepted the model terms at https://hf.co/pyannote/speaker-diarization-3.1\n"
-                    "3) You have internet access for the first download (cached after)\n"
+                    "3) You have accepted the model terms at https://hf.co/pyannote/segmentation-3.0\n"
+                    "4) You have internet access for the first download (cached after)\n"
                     "Or run with --no-diarize (or --skip-diarize-on-failure) to proceed without speaker labels.\n"
                     f"Original error: {msg}"
                 ) from exc
@@ -890,6 +891,7 @@ def build_metadata(args: argparse.Namespace, language: str) -> Dict[str, str]:
 
 def main() -> int:
     load_env_file(Path(".env"))
+    load_env_file(Path(__file__).resolve().parents[1] / ".env")
     args = parse_args()
     if args.offline:
         os.environ.setdefault("HF_HUB_OFFLINE", "1")
