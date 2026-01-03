@@ -1,5 +1,3 @@
-tap "homebrew/core"
-
 brew "sqlite-utils"
 brew "jq"
 brew "uv"
