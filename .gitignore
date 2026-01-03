@@ -10,3 +10,7 @@ node_modules
 
 # Transcription checkpoints
 .checkpoints/
+
+# Local Overcast DB copies
+overcast-db/*
+!overcast-db/.gitkeep

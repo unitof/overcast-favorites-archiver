@@ -24,7 +24,8 @@
 
 ## Data locations
 - Overcast DB path is hardcoded in `scripts/sync.zsh`.
-- Overcast uses SQLite WAL; if you copy the DB for inspection, copy `db.sqlite`, `db.sqlite-wal`, and `db.sqlite-shm` together.
+- Sync copies the Overcast DB into `overcast-db/` and reads from there.
+- Overcast uses SQLite WAL; copy `db.sqlite`, `db.sqlite-wal`, and `db.sqlite-shm` together.
 - Output JSON is `favorites.json` in repo root.
 - Download destination is hardcoded in `dlall.zsh` (Google Drive path).
 

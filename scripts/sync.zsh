@@ -6,21 +6,20 @@ if ! command -v sqlite-utils >/dev/null 2>&1; then
   exit 1
 fi
 
+script_dir="$(cd "$(dirname "$0")" && pwd)"
+repo_root="$(cd "$script_dir/.." && pwd)"
 src_dir="$HOME/Library/Containers/2EFFC350-6DCA-4E17-9FCC-4BBBC7C484C0/Data/Documents"
-tmp_dir="$(mktemp -d "./.overcast-sync.XXXXXX")"
-tmp_db="$tmp_dir/db.sqlite"
+dest_dir="$repo_root/overcast-db"
+dest_db="$dest_dir/db.sqlite"
 
-cleanup() {
-  rm -rf "$tmp_dir"
-}
-trap cleanup EXIT
+mkdir -p "$dest_dir"
 
-cp "$src_dir/db.sqlite" "$tmp_db"
+cp "$src_dir/db.sqlite" "$dest_db"
 if [[ -f "$src_dir/db.sqlite-wal" ]]; then
-  cp "$src_dir/db.sqlite-wal" "$tmp_dir/db.sqlite-wal"
+  cp "$src_dir/db.sqlite-wal" "$dest_dir/db.sqlite-wal"
 fi
 if [[ -f "$src_dir/db.sqlite-shm" ]]; then
-  cp "$src_dir/db.sqlite-shm" "$tmp_dir/db.sqlite-shm"
+  cp "$src_dir/db.sqlite-shm" "$dest_dir/db.sqlite-shm"
 fi
 
-sqlite-utils "$tmp_db" "$(<./scripts/overcast_export_recommended_episodes.sql)" > favorites.json
+sqlite-utils "$dest_db" "$(<./scripts/overcast_export_recommended_episodes.sql)" > favorites.json
