@@ -4,9 +4,15 @@ Export Overcast favorites, download audio, and optionally generate transcript si
 
 ## Prerequisites
 
-Homebrew packages:
+Homebrew packages (preferred: Brewfile):
 
 ```sh
+brew bundle
+
+# or, explicitly
+brew bundle --file=Brewfile
+
+# manual install (no Brewfile)
 brew install sqlite-utils jq uv ffmpeg python@3.12
 ```
 
