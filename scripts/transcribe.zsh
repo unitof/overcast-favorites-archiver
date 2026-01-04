@@ -35,7 +35,7 @@ recursive=0
 overwrite=0
 format="txt"
 extensions_string="$audio_extensions_default"
-locale=""
+locale="" # should default to current
 censor=0
 
 paths=()
