@@ -209,6 +209,7 @@ for audio_path in "${audio_files[@]}"; do
     continue
   fi
 
+  echo "Transcribing $audio_path"
   cmd=("$yap_path" transcribe "$audio_path" -o "$output_path")
   if [[ "$format" == "srt" ]]; then
     cmd+=(--srt)
