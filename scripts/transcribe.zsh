@@ -15,11 +15,12 @@ Usage: scripts/transcribe.zsh [options] [paths...]
 Options:
   -r, --recursive       Recurse into subdirectories when scanning folders.
   --extensions LIST     Comma-separated list of audio extensions to include.
-  --format FORMAT       Sidecar format to emit: txt or srt (default: txt).
+  --format FORMAT       Sidecar format to emit: txt or srt (default: srt).
   --txt                 Shortcut for --format txt.
   --srt                 Shortcut for --format srt.
   --overwrite           Overwrite existing sidecar files instead of skipping.
   --locale LOCALE       Locale for transcription (passed to yap).
+  --max-length N        Max line length for yap output (default: 1000000).
   --censor              Enable audio censoring (passed to yap).
   -h, --help            Show this help message.
 
@@ -35,10 +36,11 @@ audio_extensions_default=".aac,.flac,.m4a,.m4b,.mkv,.mov,.mp3,.mp4,.ogg,.opus,.w
 
 recursive=0
 overwrite=0
-format="txt"
+format="srt"
 extensions_string="$audio_extensions_default"
 locale="" # should default to current
 censor=0
+max_length="1000000"
 
 paths=()
 
@@ -82,6 +84,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --locale=*)
       locale="${1#*=}"
+      shift
+      ;;
+    --max-length)
+      max_length="$2"
+      shift 2
+      ;;
+    --max-length=*)
+      max_length="${1#*=}"
       shift
       ;;
     --censor)
@@ -215,6 +225,9 @@ for audio_path in "${audio_files[@]}"; do
     cmd+=(--srt)
   else
     cmd+=(--txt)
+  fi
+  if [[ -n "$max_length" ]]; then
+    cmd+=(--max-length "$max_length")
   fi
   if [[ -n "$locale" ]]; then
     cmd+=(--locale "$locale")
