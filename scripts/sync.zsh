@@ -8,7 +8,7 @@ fi
 
 script_dir="$(cd "$(dirname "$0")" && pwd)"
 repo_root="$(cd "$script_dir/.." && pwd)"
-src_dir="$HOME/Library/Containers/2EFFC350-6DCA-4E17-9FCC-4BBBC7C484C0/Data/Documents"
+src_dir="$HOME/Library/Containers/197F2137-E756-46BB-82CF-ACDF10BDDCF3/Data/Documents"
 dest_dir="$repo_root/overcast-db"
 dest_db="$dest_dir/db.sqlite"
 
