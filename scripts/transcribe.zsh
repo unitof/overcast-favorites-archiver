@@ -1,7 +1,9 @@
 #!/bin/zsh
 set -euo pipefail
+setopt extended_glob null_glob
 
-if ! command -v yap >/dev/null 2>&1; then
+yap_path="$(command -v yap 2>/dev/null || true)"
+if [[ -z "$yap_path" || ! -x "$yap_path" ]]; then
   echo "yap not found. Install with: brew install finnvoor/tools/yap"
   exit 1
 fi
@@ -113,6 +115,24 @@ if (( ${#paths[@]} == 0 )); then
   paths=("${default_paths[@]}")
 fi
 
+if [[ -z "$locale" ]]; then
+  raw_locale=""
+  for candidate in "${LC_ALL:-}" "${LANG:-}" "${LC_CTYPE:-}"; do
+    if [[ -z "$candidate" ]]; then
+      continue
+    fi
+    base="${candidate%%.*}"
+    base="${base%%@*}"
+    if [[ "$base" != "C" && "$base" != "POSIX" ]]; then
+      raw_locale="$base"
+      break
+    fi
+  done
+  if [[ -n "$raw_locale" ]]; then
+    locale="${raw_locale//_/-}"
+  fi
+fi
+
 IFS=',' read -r -A ext_list <<< "$extensions_string"
 extensions=()
 for ext in "${ext_list[@]}"; do
@@ -149,17 +169,17 @@ for path in "${paths[@]}"; do
   fi
   if [[ -d "$path" ]]; then
     if (( recursive )); then
-      while IFS= read -r -d '' file; do
+      for file in "$path"/**/*(.N); do
         if is_audio "$file"; then
           audio_files+=("$file")
         fi
-      done < <(find "$path" -type f -print0)
+      done
     else
-      while IFS= read -r -d '' file; do
+      for file in "$path"/*(.N); do
         if is_audio "$file"; then
           audio_files+=("$file")
         fi
-      done < <(find "$path" -maxdepth 1 -type f -print0)
+      done
     fi
     continue
   fi
@@ -171,8 +191,7 @@ if (( ${#audio_files[@]} == 0 )); then
   exit 1
 fi
 
-IFS=$'\n' audio_files=($(printf '%s\n' "${audio_files[@]}" | sort -u))
-unset IFS
+typeset -U audio_files
 
 case "$format" in
   txt|srt)
@@ -190,7 +209,7 @@ for audio_path in "${audio_files[@]}"; do
     continue
   fi
 
-  cmd=(yap transcribe "$audio_path" -o "$output_path")
+  cmd=("$yap_path" transcribe "$audio_path" -o "$output_path")
   if [[ "$format" == "srt" ]]; then
     cmd+=(--srt)
   else
