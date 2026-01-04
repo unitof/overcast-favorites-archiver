@@ -5,9 +5,7 @@
     "start": "zsh ./scripts/start.zsh",
     "sync": "zsh ./scripts/sync.zsh",
     "download": "zsh ./scripts/download.zsh",
-    "transcribe": "sh -c 'command -v uv >/dev/null 2>&1 || { echo \"uv not found. Install with: brew install uv\"; exit 1; }; command -v ffmpeg >/dev/null 2>&1 || { echo \"ffmpeg not found. Install with: brew install ffmpeg\"; exit 1; }; [ -x .venv/bin/python ] || { echo \"Missing .venv. Run: npm run transcribe:setup\"; exit 1; }; mkdir -p .cache/matplotlib .cache/fontconfig .cache/huggingface; MPLCONFIGDIR=.cache/matplotlib XDG_CACHE_HOME=.cache HF_HOME=.cache/huggingface HF_HUB_CACHE=.cache/huggingface/hub ./.venv/bin/python scripts/transcribe_sidecars.py \"$@\"' --",
-    "transcribe:setup": "sh -c 'command -v uv >/dev/null 2>&1 || { echo \"uv not found. Install with: brew install uv\"; exit 1; }; PY=\"\"; for v in 3.12 3.11 3.10; do if command -v python$v >/dev/null 2>&1; then PY=python$v; break; fi; done; if [ -z \"$PY\" ]; then echo \"No supported Python found (need 3.10-3.12). Install with: brew install python@3.12\"; exit 1; fi; uv venv --python \"$PY\" .venv; uv pip install --python .venv/bin/python -r requirements.txt'",
-    "postinstall": "npm run transcribe:setup"
+    "transcribe": "zsh ./scripts/transcribe.zsh"
   },
   "keywords": [],
   "author": "Jacob Ford <j@cobford.com> (https://jacobford.com/)",

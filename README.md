@@ -13,14 +13,13 @@ brew bundle
 brew bundle --file=Brewfile
 
 # manual install (no Brewfile)
-brew install sqlite-utils jq uv ffmpeg python@3.12
+brew install sqlite-utils jq finnvoor/tools/yap
 ```
 
 Notes:
 - `sqlite-utils` is required for `npm run sync`.
 - `jq` is required for `npm run download`.
-- `uv` + `ffmpeg` are required for `npm run transcribe`.
-- Python 3.10-3.12 is required for `npm run transcribe:setup`.
+- `yap` is required for `npm run transcribe`.
 
 ## Commands
 
@@ -37,11 +36,3 @@ npm start -- -t
 ```
 
 `--transcribe` also works.
-
-## Transcription setup
-
-```sh
-npm run transcribe:setup
-```
-
-This creates the virtual environment and installs `requirements.txt`.
