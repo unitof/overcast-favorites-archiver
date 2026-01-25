@@ -212,6 +212,8 @@ case "$format" in
     ;;
  esac
 
+failures=()
+
 for audio_path in "${audio_files[@]}"; do
   output_path="${audio_path%.*}.${format}"
   if [[ -e "$output_path" && $overwrite -eq 0 ]]; then
@@ -236,6 +238,20 @@ for audio_path in "${audio_files[@]}"; do
     cmd+=(--censor)
   fi
 
-  "${cmd[@]}"
-  echo "Wrote $output_path"
+  if "${cmd[@]}"; then
+    echo "Wrote $output_path"
+  else
+    status=$?
+    echo "yap failed for $audio_path (exit $status); skipping"
+    failures+=("$audio_path")
+  fi
 done
+
+if (( ${#failures[@]} > 0 )); then
+  echo ""
+  echo "Transcription failures (${#failures[@]}):"
+  for failed in "${failures[@]}"; do
+    echo "  - $failed"
+  done
+  exit 1
+fi
