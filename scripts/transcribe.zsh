@@ -238,10 +238,14 @@ for audio_path in "${audio_files[@]}"; do
     cmd+=(--censor)
   fi
 
-  if "${cmd[@]}"; then
+  set +e
+  "${cmd[@]}"
+  status=$?
+  set -e
+
+  if (( status == 0 )); then
     echo "Wrote $output_path"
   else
-    status=$?
     echo "yap failed for $audio_path (exit $status); skipping"
     failures+=("$audio_path")
   fi
