@@ -2,7 +2,30 @@
 set -euo pipefail
 setopt extended_glob null_glob
 
-yap_path="$(command -v yap 2>/dev/null || true)"
+local_yap_root="${YAP_LOCAL_ROOT:-$HOME/repos/forks/yap}"
+local_yap_candidates=(
+  "$local_yap_root/.build/arm64-apple-macosx/release/yap"
+  "$local_yap_root/.build/arm64-apple-macosx/debug/yap"
+  "$local_yap_root/.build/release/yap"
+  "$local_yap_root/.build/debug/yap"
+)
+
+yap_path=""
+if [[ -n "${YAP_PATH:-}" ]]; then
+  yap_path="$YAP_PATH"
+else
+  for candidate in "${local_yap_candidates[@]}"; do
+    if [[ -x "$candidate" ]]; then
+      yap_path="$candidate"
+      break
+    fi
+  done
+fi
+
+if [[ -z "$yap_path" || ! -x "$yap_path" ]]; then
+  yap_path="$(command -v yap 2>/dev/null || true)"
+fi
+
 if [[ -z "$yap_path" || ! -x "$yap_path" ]]; then
   echo "yap not found. Install with: brew install finnvoor/tools/yap"
   exit 1
@@ -25,6 +48,7 @@ Options:
   -h, --help            Show this help message.
 
 If no paths are provided, the Overcast Favorites archive path is used.
+SRT output is post-processed to remove index lines and saved as .srt.txt.
 USAGE
 }
 
@@ -215,14 +239,25 @@ case "$format" in
 failures=()
 
 for audio_path in "${audio_files[@]}"; do
-  output_path="${audio_path%.*}.${format}"
+  output_base="${audio_path%.*}"
+  if [[ "$format" == "srt" ]]; then
+    output_path="${output_base}.srt.txt"
+    temp_output_path="${output_base}.srt"
+  else
+    output_path="${output_base}.${format}"
+    temp_output_path=""
+  fi
   if [[ -e "$output_path" && $overwrite -eq 0 ]]; then
     echo "Skipping $audio_path (sidecar exists)"
     continue
   fi
 
   echo "Transcribing $audio_path"
-  cmd=("$yap_path" transcribe "$audio_path" -o "$output_path")
+  if [[ "$format" == "srt" ]]; then
+    cmd=("$yap_path" transcribe "$audio_path" -o "$temp_output_path")
+  else
+    cmd=("$yap_path" transcribe "$audio_path" -o "$output_path")
+  fi
   if [[ "$format" == "srt" ]]; then
     cmd+=(--srt)
   else
@@ -240,13 +275,63 @@ for audio_path in "${audio_files[@]}"; do
 
   set +e
   "${cmd[@]}"
-  status=$?
+  exit_status=$?
   set -e
 
-  if (( status == 0 )); then
-    echo "Wrote $output_path"
+  if (( exit_status == 0 )); then
+    if [[ "$format" == "srt" ]]; then
+      filtered_path="${temp_output_path}.filtered"
+      set +e
+      /usr/bin/awk '
+        function is_index(line) { return line ~ /^[0-9]+$/ }
+        function is_ts(line) { return line ~ /^[0-9]{2}:[0-9]{2}:[0-9]{2},[0-9]{3} --> / }
+        function emit(line) {
+          if (is_ts(line) && emitted && !last_blank) {
+            print ""
+          }
+          print line
+          emitted=1
+          last_blank = (line == "")
+        }
+        {
+          if (has_pending) {
+            if (is_index(pending) && is_ts($0)) {
+              # drop the SRT index line
+            } else {
+              emit(pending)
+            }
+          }
+          pending=$0
+          has_pending=1
+        }
+        END {
+          if (has_pending) {
+            emit(pending)
+          }
+        }
+      ' "$temp_output_path" > "$filtered_path"
+      awk_status=$?
+      post_status=$awk_status
+      if (( awk_status == 0 )); then
+        /bin/mv "$filtered_path" "$temp_output_path"
+        post_status=$?
+        if (( post_status == 0 )); then
+          /bin/mv "$temp_output_path" "$output_path"
+          post_status=$?
+        fi
+      fi
+      set -e
+      if (( post_status == 0 )); then
+        echo "Wrote $output_path"
+      else
+        echo "Post-processing failed for $audio_path; skipping"
+        failures+=("$audio_path")
+      fi
+    else
+      echo "Wrote $output_path"
+    fi
   else
-    echo "yap failed for $audio_path (exit $status); skipping"
+    echo "yap failed for $audio_path (exit $exit_status); skipping"
     failures+=("$audio_path")
   fi
 done
