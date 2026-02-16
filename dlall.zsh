@@ -1,6 +1,14 @@
 #!/bin/zsh
 
+set -euo pipefail
+setopt extended_glob null_glob
+
+script_dir="$(cd "$(dirname "$0")" && pwd)"
+source "$script_dir/scripts/naming.zsh"
+
 json_file="favorites.json"
+db_path="$script_dir/overcast-db/db.sqlite"
+archive_root="/Users/jacob/Library/CloudStorage/GoogleDrive-j@cobford.com/My Drive/Filing Cabinet/Podcast Archive/[My Overcast Favorites]"
 
 typeset -A fail_counts
 typeset -A fail_lines
@@ -20,15 +28,21 @@ record_failure() {
   fail_lines[$code]+="${line}"$'\n'
 }
 
+oc_init_published_lookup "$db_path"
+if [[ -n "$oc_published_lookup_warning" ]]; then
+  echo "Warning: $oc_published_lookup_warning"
+fi
+
 while read -r episode; do
-  feedTitle=$(echo "$episode" | jq -r '.feedTitle' | tr -d '_')
-  title=$(echo "$episode" | jq -r '.title'     | tr -cs '[:alnum:] .-' ' ' | sed 's/^ *//; s/ *$//')
+  feedTitle=$(echo "$episode" | jq -r '.feedTitle')
+  title=$(echo "$episode" | jq -r '.title')
   episodeDate=$(echo "$episode" | jq -r '.userRecommendedTimeHuman')
+  episodeURL=$(echo "$episode" | jq -r '.episodeURL')
   url=$(echo "$episode" | jq -r '.downloadURL')
 
   # First, construct a preliminary output path to check if file exists
   # Use mp3 as default extension for initial check
-  out_path_base="/Users/jacob/Library/CloudStorage/GoogleDrive-j@cobford.com/My Drive/Filing Cabinet/Podcast Archive/[My Overcast Favorites]/$feedTitle - $episodeDate - $title"
+  out_path_base="$archive_root/$(oc_build_base_name "$feedTitle" "$title" "$episodeDate" "$episodeURL" "$url")"
   
   # Check if any file with this base name already exists (with any extension)
   if ls "$out_path_base".* >/dev/null 2>&1; then
@@ -77,7 +91,12 @@ while read -r episode; do
     echo "Failed ($http_code) $title"
     continue
   fi
-done < <(jq -c '.[]' "$json_file")
+done < <(jq -c '.[]' "$json_file") || true
+
+if (( oc_published_missing > 0 )); then
+  echo ""
+  echo "Missing published dates for ${oc_published_missing} episode(s); used favorited dates."
+fi
 
 if (( ${#fail_codes[@]} > 0 )); then
   echo ""

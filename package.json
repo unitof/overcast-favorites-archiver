@@ -5,7 +5,8 @@
     "start": "zsh ./scripts/start.zsh",
     "sync": "zsh ./scripts/sync.zsh",
     "download": "zsh ./scripts/download.zsh",
-    "transcribe": "zsh ./scripts/transcribe.zsh"
+    "transcribe": "YAP_LOCAL_ROOT=\"$HOME/repos/forks/yap\" zsh ./scripts/transcribe.zsh",
+    "rename": "zsh ./scripts/rename.zsh"
   },
   "keywords": [],
   "author": "Jacob Ford <j@cobford.com> (https://jacobford.com/)",
