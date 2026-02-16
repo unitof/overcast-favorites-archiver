@@ -8,7 +8,28 @@ fi
 
 script_dir="$(cd "$(dirname "$0")" && pwd)"
 repo_root="$(cd "$script_dir/.." && pwd)"
-src_dir="$HOME/Library/Containers/197F2137-E756-46BB-82CF-ACDF10BDDCF3/Data/Documents"
+bundle_id="fm.overcast.overcast"
+containers_dir="$HOME/Library/Containers"
+src_dir="$(
+  for container in "$containers_dir"/*; do
+    metadata_plist="$container/.com.apple.containermanagerd.metadata.plist"
+    [[ -f "$metadata_plist" ]] || continue
+    metadata_id="$(plutil -extract MCMMetadataIdentifier raw -o - "$metadata_plist" 2>/dev/null || true)"
+    [[ "$metadata_id" == "$bundle_id" ]] || continue
+
+    data_dir="$container/Data/Documents"
+    db_path="$data_dir/db.sqlite"
+    [[ -f "$db_path" ]] || continue
+
+    printf "%s\t%s\n" "$(stat -f '%m' "$db_path")" "$data_dir"
+  done | sort -nr | head -n1 | cut -f2-
+)"
+if [[ -z "${src_dir}" ]]; then
+  echo "Could not locate Overcast DB container for bundle ID: $bundle_id"
+  echo "Open Overcast.app once, then retry."
+  exit 1
+fi
+
 dest_dir="$repo_root/overcast-db"
 dest_db="$dest_dir/db.sqlite"
 
