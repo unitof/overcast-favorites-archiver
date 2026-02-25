@@ -217,14 +217,14 @@ reorder_newest_oldest_alternating() {
   local -a dated_sorted=()
   local -a dated_paths=()
   local -a reordered=()
-  local path date left right
+  local audio_path date left right
 
-  for path in "${input[@]}"; do
-    date="$(extract_episode_date "$path")"
+  for audio_path in "${input[@]}"; do
+    date="$(extract_episode_date "$audio_path")"
     if [[ -n "$date" ]]; then
-      dated_records+=("${date}"$'\t'"$path")
+      dated_records+=("${date}"$'\t'"$audio_path")
     else
-      undated+=("$path")
+      undated+=("$audio_path")
     fi
   done
 
@@ -251,22 +251,22 @@ reorder_newest_oldest_alternating() {
 }
 
 audio_files=()
-for path in "${paths[@]}"; do
-  if [[ -f "$path" ]]; then
-    if is_audio "$path"; then
-      audio_files+=("$path")
+for scan_path in "${paths[@]}"; do
+  if [[ -f "$scan_path" ]]; then
+    if is_audio "$scan_path"; then
+      audio_files+=("$scan_path")
     fi
     continue
   fi
-  if [[ -d "$path" ]]; then
+  if [[ -d "$scan_path" ]]; then
     if (( recursive )); then
-      for file in "$path"/**/*(.N); do
+      for file in "$scan_path"/**/*(.N); do
         if is_audio "$file"; then
           audio_files+=("$file")
         fi
       done
     else
-      for file in "$path"/*(.N); do
+      for file in "$scan_path"/*(.N); do
         if is_audio "$file"; then
           audio_files+=("$file")
         fi
@@ -274,7 +274,7 @@ for path in "${paths[@]}"; do
     fi
     continue
   fi
-  echo "Path not found: $path"
+  echo "Path not found: $scan_path"
 done
 
 if (( ${#audio_files[@]} == 0 )); then
