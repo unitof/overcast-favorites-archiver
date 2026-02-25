@@ -80,13 +80,9 @@ oc_get_published_date() {
   echo "$published"
 }
 
-oc_build_base_name() {
+oc_build_show_episode_parts() {
   local feed_title_raw="$1"
   local title_raw="$2"
-  local favorite_date="$3"
-  local episode_url="$4"
-  local download_url="$5"
-
   local show_name
   local episode_title
   local episode_name
@@ -104,6 +100,23 @@ oc_build_base_name() {
   if [[ -z "$episode_name" ]]; then
     episode_name="Unknown Episode"
   fi
+
+  printf '%s\t%s\n' "$show_name" "$episode_name"
+}
+
+oc_build_base_name() {
+  local feed_title_raw="$1"
+  local title_raw="$2"
+  local favorite_date="$3"
+  local episode_url="$4"
+  local download_url="$5"
+  local show_name
+  local episode_name
+  local parts
+
+  parts=$(oc_build_show_episode_parts "$feed_title_raw" "$title_raw")
+  show_name="${parts%%$'\t'*}"
+  episode_name="${parts#*$'\t'}"
 
   local published_date
   published_date=$(oc_get_published_date "$episode_url" "$download_url")

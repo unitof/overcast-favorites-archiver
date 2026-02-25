@@ -40,16 +40,23 @@ while read -r episode; do
   episodeDate=$(echo "$episode" | jq -r '.userRecommendedTimeHuman')
   episodeURL=$(echo "$episode" | jq -r '.episodeURL')
   url=$(echo "$episode" | jq -r '.downloadURL')
+  name_parts=$(oc_build_show_episode_parts "$feedTitle" "$title")
+  show_name="${name_parts%%$'\t'*}"
+  episode_name="${name_parts#*$'\t'}"
 
-  # First, construct a preliminary output path to check if file exists
-  # Use mp3 as default extension for initial check
-  out_path_base="$archive_root/$(oc_build_base_name "$feedTitle" "$title" "$episodeDate" "$episodeURL" "$url")"
-  
-  # Check if any file with this base name already exists (with any extension)
-  if ls "$out_path_base".* >/dev/null 2>&1; then
+  # Fast skip check: match any published date to avoid per-item DB lookups.
+  show_name_glob="${(b)show_name}"
+  episode_name_glob="${(b)episode_name}"
+  existing_matches=(
+    "$archive_root"/F${episodeDate}\ P????-??-??\ -\ ${show_name_glob}\ -\ ${episode_name_glob}.*
+  )
+  if (( ${#existing_matches[@]} > 0 )); then
     echo "Skipping $title (already exists)"
     continue
   fi
+
+  # Only build the canonical name when we actually need to download.
+  out_path_base="$archive_root/$(oc_build_base_name "$feedTitle" "$title" "$episodeDate" "$episodeURL" "$url")"
 
   # 1) HEAD request to get final URL after redirects
   final_url=$(curl -sIL -w '%{url_effective}' -o /dev/null --max-redirs 20 "$url")
