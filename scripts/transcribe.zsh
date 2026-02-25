@@ -307,7 +307,7 @@ for audio_path in "${audio_files[@]}"; do
     output_path="${output_base}.${format}"
   fi
   if [[ -e "$output_path" && $overwrite -eq 0 ]]; then
-    ((skipped_sidecar_count++))
+    ((++skipped_sidecar_count))
     continue
   fi
   pending_audio_files+=("$audio_path")
