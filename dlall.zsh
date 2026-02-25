@@ -13,6 +13,7 @@ archive_root="/Users/jacob/Library/CloudStorage/GoogleDrive-j@cobford.com/My Dri
 typeset -A fail_counts
 typeset -A fail_lines
 typeset -a fail_codes
+jq_alternating_filter='. as $episodes | [range(0; ($episodes | length)) as $i | (if ($i % 2) == 0 then ($i / 2 | floor) else (($episodes | length) - 1 - (($i - 1) / 2 | floor)) end) | $episodes[.]][]'
 
 record_failure() {
   local code="$1"
@@ -91,7 +92,7 @@ while read -r episode; do
     echo "Failed ($http_code) $title"
     continue
   fi
-done < <(jq -c '.[]' "$json_file") || true
+done < <(jq -c "$jq_alternating_filter" "$json_file") || true
 
 if (( oc_published_missing > 0 )); then
   echo ""

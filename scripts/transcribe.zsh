@@ -193,6 +193,63 @@ is_audio() {
   return 1
 }
 
+extract_episode_date() {
+  local path="$1"
+  local base="${path:t:r}"
+  local date=""
+
+  if [[ "$base" == F????-??-??\ -* ]]; then
+    date="${base[2,11]}"
+  elif [[ "$base" == *" - "????-??-??" - "* ]]; then
+    local tail="${base#* - }"
+    date="${tail%% - *}"
+  fi
+
+  if [[ "$date" == ????-??-?? ]]; then
+    printf '%s\n' "$date"
+  fi
+}
+
+reorder_newest_oldest_alternating() {
+  local -a input=("$@")
+  local -a dated_records=()
+  local -a undated=()
+  local -a dated_sorted=()
+  local -a dated_paths=()
+  local -a reordered=()
+  local path date left right
+
+  for path in "${input[@]}"; do
+    date="$(extract_episode_date "$path")"
+    if [[ -n "$date" ]]; then
+      dated_records+=("${date}"$'\t'"$path")
+    else
+      undated+=("$path")
+    fi
+  done
+
+  if (( ${#dated_records[@]} > 0 )); then
+    dated_sorted=("${(@f)$(printf '%s\n' "${dated_records[@]}" | LC_ALL=C sort -r)}")
+    for record in "${dated_sorted[@]}"; do
+      dated_paths+=("${record#*$'\t'}")
+    done
+
+    left=1
+    right=${#dated_paths[@]}
+    while (( left <= right )); do
+      reordered+=("${dated_paths[$left]}")
+      ((left++))
+      if (( left <= right )); then
+        reordered+=("${dated_paths[$right]}")
+        ((right--))
+      fi
+    done
+  fi
+
+  reordered+=("${undated[@]}")
+  printf '%s\n' "${reordered[@]}"
+}
+
 audio_files=()
 for path in "${paths[@]}"; do
   if [[ -f "$path" ]]; then
@@ -226,6 +283,7 @@ if (( ${#audio_files[@]} == 0 )); then
 fi
 
 typeset -U audio_files
+audio_files=("${(@f)$(reorder_newest_oldest_alternating "${audio_files[@]}")}")
 
 case "$format" in
   txt|srt)
