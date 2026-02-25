@@ -198,7 +198,9 @@ extract_episode_date() {
   local base="${path:t:r}"
   local date=""
 
-  if [[ "$base" == F????-??-??\ -* ]]; then
+  if [[ "$base" == F????-??-??\ P????-??-??\ -* ]]; then
+    date="${base[2,11]}"
+  elif [[ "$base" == F????-??-??\ -* ]]; then
     date="${base[2,11]}"
   elif [[ "$base" == *" - "????-??-??" - "* ]]; then
     local tail="${base#* - }"
@@ -283,7 +285,6 @@ if (( ${#audio_files[@]} == 0 )); then
 fi
 
 typeset -U audio_files
-audio_files=("${(@f)$(reorder_newest_oldest_alternating "${audio_files[@]}")}")
 
 case "$format" in
   txt|srt)
@@ -293,6 +294,34 @@ case "$format" in
     exit 1
     ;;
  esac
+
+audio_files=("${(@f)$(reorder_newest_oldest_alternating "${audio_files[@]}")}")
+
+pending_audio_files=()
+skipped_sidecar_count=0
+for audio_path in "${audio_files[@]}"; do
+  output_base="${audio_path%.*}"
+  if [[ "$format" == "srt" ]]; then
+    output_path="${output_base}.srt.txt"
+  else
+    output_path="${output_base}.${format}"
+  fi
+  if [[ -e "$output_path" && $overwrite -eq 0 ]]; then
+    ((skipped_sidecar_count++))
+    continue
+  fi
+  pending_audio_files+=("$audio_path")
+done
+audio_files=("${pending_audio_files[@]}")
+
+if (( skipped_sidecar_count > 0 && overwrite == 0 )); then
+  echo "Skipping ${skipped_sidecar_count} file(s) with existing sidecar."
+fi
+
+if (( ${#audio_files[@]} == 0 )); then
+  echo "No audio files need transcription."
+  exit 0
+fi
 
 failures=()
 
@@ -304,10 +333,6 @@ for audio_path in "${audio_files[@]}"; do
   else
     output_path="${output_base}.${format}"
     temp_output_path=""
-  fi
-  if [[ -e "$output_path" && $overwrite -eq 0 ]]; then
-    echo "Skipping $audio_path (sidecar exists)"
-    continue
   fi
 
   echo "Transcribing $audio_path"
