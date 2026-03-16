@@ -27,7 +27,7 @@ if [[ -z "$yap_path" || ! -x "$yap_path" ]]; then
 fi
 
 if [[ -z "$yap_path" || ! -x "$yap_path" ]]; then
-  echo "yap not found. Install with: brew install finnvoor/tools/yap"
+  echo "yap not found. Install with: brew install yap"
   exit 1
 fi
 
