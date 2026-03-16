@@ -13,8 +13,44 @@ download_user_agent="Overcast Favorites Archiver/1.0 (+https://github.com/unitof
 
 typeset -A fail_counts
 typeset -A fail_lines
+typeset -A existing_archive_keys
 typeset -a fail_codes
 jq_alternating_filter='. as $episodes | [range(0; ($episodes | length)) as $i | (if ($i % 2) == 0 then ($i / 2 | floor) else (($episodes | length) - 1 - (($i - 1) / 2 | floor)) end) | $episodes[.]][]'
+jq_name_filter='
+  def output_field:
+    tostring | gsub("\u001f"; " ");
+  def trim_spaces: gsub("^ +| +$"; "") | gsub("  +"; " ");
+  def sanitize_name:
+    gsub("_"; "")
+    | gsub("[^[:alnum:] .-]+"; " ")
+    | trim_spaces;
+  def regex_escape:
+    gsub("\\."; "\\.");
+  def strip_show_from_title($show):
+    if $show == "" then .
+    else gsub("(?i)" + ($show | regex_escape); "")
+      | gsub("^[[:space:]]*[-:]+[[:space:]]*"; "")
+      | gsub("[[:space:]]*[-:]+[[:space:]]*$"; "")
+      | trim_spaces
+    end;
+  .feedTitle // "" as $feed
+  | .title // "" as $title
+  | ($feed | sanitize_name) as $show_name
+  | ($title | sanitize_name) as $episode_title
+  | ($episode_title | strip_show_from_title($show_name)) as $stripped_episode
+  | [
+      $feed,
+      $title,
+      (.userRecommendedTimeHuman // ""),
+      (.episodeURL // ""),
+      (.downloadURL // ""),
+      (if $show_name == "" then "Unknown Show" else $show_name end),
+      (if $stripped_episode != "" then $stripped_episode elif $episode_title != "" then $episode_title else "Unknown Episode" end)
+    ]
+  | map(output_field)
+  | join("\u001f")
+'
+jq_episode_fields_filter="$jq_alternating_filter | $jq_name_filter"
 
 record_failure() {
   local code="$1"
@@ -30,34 +66,60 @@ record_failure() {
   fail_lines[$code]+="${line}"$'\n'
 }
 
+index_existing_archive() {
+  local existing_path
+  local filename
+  local base_name
+  local favorite_date
+  local remainder
+
+  existing_archive_keys=()
+  for existing_path in "$archive_root"/*(.N); do
+    filename="${existing_path:t}"
+    base_name="${filename%.*}"
+    [[ "$base_name" == F????-??-??\ P????-??-??\ -\ * ]] || continue
+
+    favorite_date="${base_name[2,11]}"
+    remainder="${base_name#F????-??-?? P????-??-?? - }"
+    existing_archive_keys["F${favorite_date} - ${remainder}"]=1
+  done
+}
+
 oc_init_published_lookup "$db_path"
+index_existing_archive
 if [[ -n "$oc_published_lookup_warning" ]]; then
   echo "Warning: $oc_published_lookup_warning"
 fi
 
-while read -r episode; do
-  feedTitle=$(echo "$episode" | jq -r '.feedTitle')
-  title=$(echo "$episode" | jq -r '.title')
-  episodeDate=$(echo "$episode" | jq -r '.userRecommendedTimeHuman')
-  episodeURL=$(echo "$episode" | jq -r '.episodeURL')
-  url=$(echo "$episode" | jq -r '.downloadURL')
-  name_parts=$(oc_build_show_episode_parts "$feedTitle" "$title")
-  show_name="${name_parts%%$'\t'*}"
-  episode_name="${name_parts#*$'\t'}"
+field_separator=$'\x1f'
 
-  # Fast skip check: match any published date to avoid per-item DB lookups.
+while IFS="$field_separator" read -r feedTitle title episodeDate episodeURL url show_name episode_name; do
+
+  skip_key="F${episodeDate} - ${show_name} - ${episode_name}"
+  if (( ${+existing_archive_keys[$skip_key]} )); then
+    echo "Skipping $title (already exists)"
+    continue
+  fi
+
+  # Fallback for files that don't match the canonical naming pattern.
   show_name_glob="${(b)show_name}"
   episode_name_glob="${(b)episode_name}"
   existing_matches=(
     "$archive_root"/F${episodeDate}\ P????-??-??\ -\ ${show_name_glob}\ -\ ${episode_name_glob}.*
   )
   if (( ${#existing_matches[@]} > 0 )); then
+    existing_archive_keys[$skip_key]=1
     echo "Skipping $title (already exists)"
     continue
   fi
 
   # Only build the canonical name when we actually need to download.
-  out_path_base="$archive_root/$(oc_build_base_name "$feedTitle" "$title" "$episodeDate" "$episodeURL" "$url")"
+  published_date=$(oc_get_published_date "$episodeURL" "$url")
+  if [[ -z "$published_date" ]]; then
+    published_date="$episodeDate"
+    ((oc_published_missing++))
+  fi
+  out_path_base="$archive_root/F${episodeDate} P${published_date} - ${show_name} - ${episode_name}"
 
   # 1) HEAD request to get final URL after redirects
   final_url=$(curl -sIL -A "$download_user_agent" -w '%{url_effective}' -o /dev/null --max-redirs 20 "$url")
@@ -101,7 +163,9 @@ while read -r episode; do
     echo "Failed ($http_code) $title"
     continue
   fi
-done < <(jq -c "$jq_alternating_filter" "$json_file") || true
+
+  existing_archive_keys[$skip_key]=1
+done < <(jq -r "$jq_episode_fields_filter" "$json_file") || true
 
 if (( oc_published_missing > 0 )); then
   echo ""
