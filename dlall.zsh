@@ -7,6 +7,7 @@ script_dir="$(cd "$(dirname "$0")" && pwd)"
 source "$script_dir/scripts/naming.zsh"
 
 json_file="favorites.json"
+missing_overrides_file="missing-episode-alternates.txt"
 db_path="$script_dir/overcast-db/db.sqlite"
 archive_root="/Users/jacob/Library/CloudStorage/GoogleDrive-j@cobford.com/My Drive/Filing Cabinet/Podcast Archive/[My Overcast Favorites]"
 download_user_agent="Overcast Favorites Archiver/1.0 (+https://github.com/unitof/overcast-favorites-archiver; podcast archiver)"
@@ -14,6 +15,8 @@ download_user_agent="Overcast Favorites Archiver/1.0 (+https://github.com/unitof
 typeset -A fail_counts
 typeset -A fail_lines
 typeset -A existing_archive_keys
+typeset -A override_url_by_source
+typeset -A override_pending_by_source
 typeset -a fail_codes
 jq_alternating_filter='. as $episodes | [range(0; ($episodes | length)) as $i | (if ($i % 2) == 0 then ($i / 2 | floor) else (($episodes | length) - 1 - (($i - 1) / 2 | floor)) end) | $episodes[.]][]'
 jq_name_filter='
@@ -85,15 +88,83 @@ index_existing_archive() {
   done
 }
 
+load_missing_overrides() {
+  local source_url
+  local override_url
+
+  override_url_by_source=()
+  override_pending_by_source=()
+
+  [[ -f "$missing_overrides_file" ]] || return
+
+  while IFS= read -r entry || [[ -n "$entry" ]]; do
+    [[ -z "$entry" ]] && continue
+    [[ "$entry" == \#* ]] && continue
+
+    source_url="${entry%%[[:space:]]##*}"
+    override_url="${entry#"$source_url"}"
+    override_url="${override_url##[[:space:]]##}"
+
+    [[ -z "$source_url" ]] && continue
+    if [[ -z "$override_url" || "$source_url" == "$override_url" ]]; then
+      override_pending_by_source[$source_url]=1
+      continue
+    fi
+    override_url_by_source[$source_url]="$override_url"
+  done < "$missing_overrides_file"
+}
+
+download_with_yt_dlp() {
+  local source_url="$1"
+  local out_path_base="$2"
+  local out_path_ref_name="$3"
+  local temp_template="${out_path_base}.%(ext)s"
+  local produced_path
+
+  if ! command -v yt-dlp >/dev/null 2>&1; then
+    record_failure "yt-dlp-missing" "${feedTitle} - ${title} (${source_url})"
+    echo "Failed (yt-dlp missing) $title"
+    return 1
+  fi
+
+  echo "Downloading Alternate $title -> ${out_path_base}.mp3 (yt-dlp: $source_url)"
+
+  if ! yt-dlp \
+    --quiet \
+    --no-warnings \
+    --extract-audio \
+    --audio-format mp3 \
+    --audio-quality 0 \
+    --output "$temp_template" \
+    "$source_url"; then
+    rm -f "${out_path_base}".*
+    record_failure "yt-dlp" "${feedTitle} - ${title} (${source_url})"
+    echo "Failed (yt-dlp) $title"
+    return 1
+  fi
+
+  produced_path="${out_path_base}.mp3"
+  if [[ ! -f "$produced_path" ]]; then
+    record_failure "yt-dlp" "${feedTitle} - ${title} (${source_url})"
+    echo "Failed (yt-dlp) $title"
+    return 1
+  fi
+
+  typeset -g "$out_path_ref_name=$produced_path"
+  return 0
+}
+
+field_separator=$'\x1f'
 oc_init_published_lookup "$db_path"
 index_existing_archive
+load_missing_overrides
 if [[ -n "$oc_published_lookup_warning" ]]; then
   echo "Warning: $oc_published_lookup_warning"
 fi
 
-field_separator=$'\x1f'
-
 while IFS="$field_separator" read -r feedTitle title episodeDate episodeURL url show_name episode_name; do
+  override_url="${override_url_by_source[$url]:-}"
+  override_pending="${override_pending_by_source[$url]:-}"
 
   skip_key="F${episodeDate} - ${show_name} - ${episode_name}"
   if (( ${+existing_archive_keys[$skip_key]} )); then
@@ -121,6 +192,17 @@ while IFS="$field_separator" read -r feedTitle title episodeDate episodeURL url 
   fi
   out_path_base="$archive_root/F${episodeDate} P${published_date} - ${show_name} - ${episode_name}"
 
+  if [[ -n "$override_url" && "$override_url" == (#i)(https://)(www.|m.)#(youtube.com|youtu.be)(/*|) ]]; then
+    if download_with_yt_dlp "$override_url" "$out_path_base" out_path; then
+      existing_archive_keys[$skip_key]=1
+    fi
+    continue
+  fi
+
+  if [[ -n "$override_url" ]]; then
+    url="$override_url"
+  fi
+
   # 1) HEAD request to get final URL after redirects
   final_url=$(curl -sIL -A "$download_user_agent" -w '%{url_effective}' -o /dev/null --max-redirs 20 "$url")
 
@@ -139,7 +221,13 @@ while IFS="$field_separator" read -r feedTitle title episodeDate episodeURL url 
   out_path="$out_path_base.$ext"
   mkdir -p "$(dirname "$out_path")"
 
-  echo "Downloading $url -> $out_path (final URL: $final_url)"
+  download_label="Downloading $url -> $out_path (final URL: $final_url)"
+  if [[ -n "$override_url" ]]; then
+    download_label="Downloading Alternate $title -> $out_path (URL: $override_url, final URL: $final_url)"
+  elif [[ -n "$override_pending" ]]; then
+    download_label="Downloading Original $title -> $out_path (no rewrite specified)"
+  fi
+  echo "$download_label"
 
   # 3) Actually download using the original URL (curl -L follows redirects)
   http_code=$(curl -L --max-redirs 20 --retry 3 --silent --show-error \
@@ -174,7 +262,7 @@ fi
 
 if (( ${#fail_codes[@]} > 0 )); then
   echo ""
-  echo "Failed downloads by HTTP code:"
+  echo "Failed downloads by HTTP code or source:"
   for code in "${fail_codes[@]}"; do
     echo "  $code (${fail_counts[$code]})"
     while IFS= read -r line; do

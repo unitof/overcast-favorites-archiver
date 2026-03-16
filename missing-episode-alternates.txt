@@ -1,0 +1,11 @@
+# One alternate per line:
+# <originalURL><whitespace><replacementURL>
+# If the replacement URL is YouTube, dlall.zsh uses yt-dlp audio-only mode.
+#
+# Examples:
+# https://traffic.libsyn.com/original.mp3 https://archive.example.com/fixed.mp3
+# http://director.5by5.tv/example.mp3 https://www.youtube.com/watch?v=example
+
+https://traffic.libsyn.com/secure/benbenandblue/Ben_Ben_and_Blue_ep1_QA_with_3blue1brown.mp3?dest-id=562772
+https://mcdn.podbean.com/mf/web/tefbha/76_-_Match_Game8v8zr.mp3 https://reallifemag.com/wp-content/uploads/2021/05/Match-Game.mp3
+http://director.5by5.tv/d/pipelineclassic/5by5.cachefly.net/audio/broadcasts/pipelineclassic/2015/pipelineclassic-005.mp3

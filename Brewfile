@@ -2,3 +2,4 @@
 brew "sqlite-utils"
 brew "jq"
 brew "yap"
+brew "yt-dlp"
