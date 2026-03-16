@@ -9,6 +9,7 @@ source "$script_dir/scripts/naming.zsh"
 json_file="favorites.json"
 db_path="$script_dir/overcast-db/db.sqlite"
 archive_root="/Users/jacob/Library/CloudStorage/GoogleDrive-j@cobford.com/My Drive/Filing Cabinet/Podcast Archive/[My Overcast Favorites]"
+download_user_agent="Overcast Favorites Archiver/1.0 (+https://github.com/unitof/overcast-favorites-archiver; podcast archiver)"
 
 typeset -A fail_counts
 typeset -A fail_lines
@@ -59,7 +60,7 @@ while read -r episode; do
   out_path_base="$archive_root/$(oc_build_base_name "$feedTitle" "$title" "$episodeDate" "$episodeURL" "$url")"
 
   # 1) HEAD request to get final URL after redirects
-  final_url=$(curl -sIL -w '%{url_effective}' -o /dev/null --max-redirs 20 "$url")
+  final_url=$(curl -sIL -A "$download_user_agent" -w '%{url_effective}' -o /dev/null --max-redirs 20 "$url")
 
   # 2) Parse final URL to extract a filename and extension
   final_filename=$(basename "$final_url")
@@ -80,6 +81,7 @@ while read -r episode; do
 
   # 3) Actually download using the original URL (curl -L follows redirects)
   http_code=$(curl -L --max-redirs 20 --retry 3 --silent --show-error \
+    -A "$download_user_agent" \
     --write-out '%{http_code}' \
     --output "$out_path" \
     "$url")
