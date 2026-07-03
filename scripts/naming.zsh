@@ -8,6 +8,10 @@ oc_published_db_path=""
 oc_published_lookup_warning=""
 typeset -A oc_published_cache
 oc_published_missing=0
+typeset -a oc_title_strip_patterns
+oc_title_strip_patterns=(
+  '^\(Subscription Expired\)'
+)
 
 oc_escape_sed() {
   printf '%s' "$1" | sed -e 's/[][\\/.*^$|(){}+?]/\\&/g'
@@ -18,6 +22,18 @@ oc_sanitize_name() {
   raw="${raw//_/}"
   raw=$(echo "$raw" | tr -cs '[:alnum:] .-' ' ')
   raw=$(echo "$raw" | sed 's/^ *//; s/ *$//; s/  */ /g')
+  echo "$raw"
+}
+
+oc_apply_title_strip_patterns() {
+  local raw="$1"
+  local pattern
+
+  for pattern in "${oc_title_strip_patterns[@]}"; do
+    raw=$(printf '%s' "$raw" | sed -E "s/${pattern}//Ig")
+    raw=$(printf '%s' "$raw" | sed 's/^ *//; s/ *$//')
+  done
+
   echo "$raw"
 }
 
@@ -87,8 +103,10 @@ oc_build_show_episode_parts() {
   local episode_title
   local episode_name
 
-  show_name=$(oc_sanitize_name "$feed_title_raw")
-  episode_title=$(oc_sanitize_name "$title_raw")
+  show_name=$(oc_apply_title_strip_patterns "$feed_title_raw")
+  show_name=$(oc_sanitize_name "$show_name")
+  episode_title=$(oc_apply_title_strip_patterns "$title_raw")
+  episode_title=$(oc_sanitize_name "$episode_title")
   episode_name=$(oc_strip_show_from_title "$episode_title" "$show_name")
 
   if [[ -z "$show_name" ]]; then
@@ -136,8 +154,10 @@ oc_legacy_base_name() {
   local feed_title
   local title
 
-  feed_title=$(oc_sanitize_name "$feed_title_raw")
-  title=$(oc_sanitize_name "$title_raw")
+  feed_title=$(oc_apply_title_strip_patterns "$feed_title_raw")
+  feed_title=$(oc_sanitize_name "$feed_title")
+  title=$(oc_apply_title_strip_patterns "$title_raw")
+  title=$(oc_sanitize_name "$title")
 
   if [[ -z "$feed_title" ]]; then
     feed_title="Unknown Show"

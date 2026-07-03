@@ -23,8 +23,12 @@ jq_name_filter='
   def output_field:
     tostring | gsub("\u001f"; " ");
   def trim_spaces: gsub("^ +| +$"; "") | gsub("  +"; " ");
+  def strip_known_title_prefixes:
+    gsub("(?i)^\\(Subscription Expired\\)"; "")
+    | gsub("^ +| +$"; "");
   def sanitize_name:
-    gsub("_"; "")
+    strip_known_title_prefixes
+    | gsub("_"; "")
     | gsub("[^[:alnum:] .-]+"; " ")
     | trim_spaces;
   def regex_escape:
