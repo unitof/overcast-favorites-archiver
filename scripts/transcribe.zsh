@@ -2,24 +2,10 @@
 set -euo pipefail
 setopt extended_glob null_glob
 
-local_yap_root="${YAP_LOCAL_ROOT:-$HOME/repos/forks/yap}"
-local_yap_candidates=(
-  "$local_yap_root/.build/arm64-apple-macosx/release/yap"
-  "$local_yap_root/.build/arm64-apple-macosx/debug/yap"
-  "$local_yap_root/.build/release/yap"
-  "$local_yap_root/.build/debug/yap"
-)
-
 yap_path=""
+
 if [[ -n "${YAP_PATH:-}" ]]; then
   yap_path="$YAP_PATH"
-else
-  for candidate in "${local_yap_candidates[@]}"; do
-    if [[ -x "$candidate" ]]; then
-      yap_path="$candidate"
-      break
-    fi
-  done
 fi
 
 if [[ -z "$yap_path" || ! -x "$yap_path" ]]; then
